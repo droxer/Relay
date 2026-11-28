@@ -25,11 +25,26 @@
   --ld-gutter: var(--sp-7);
   --ld-section-gap: 9rem;
 
+  /* Landing type ladder (5 intentional sizes, backed by palette tokens) */
+  --ld-fs-display: clamp(2.15rem, 4.75vw, 4.85rem);
+  --ld-fs-section: clamp(1.85rem, 3.2vw, 3.25rem);
+  --ld-fs-subhead: var(--fs-5);       /* 22px */
+  --ld-fs-body: var(--fs-title);      /* 16px */
+  --ld-fs-ui: var(--fs-2);            /* 14px — [data-ui] rows & titles */
+  --ld-fs-meta: var(--fs-code);       /* 13px — aligns with mono code tier */
+
+  /* Landing radius contract — mirrors Relay's tool-grade scale:
+     controls & inputs: --r-2 (6px), [data-ui] containers: --r-3 (10px),
+     nested micro surfaces/code: --r-1 (4px), editorial media & tiles: 0. */
+  --ld-r-micro: var(--r-1);
+  --ld-r-control: var(--r-2);
+  --ld-r-panel: var(--r-3);
+
   min-height: 100svh;
   background: var(--ld-canvas);
   color: var(--ld-ink);
   font-family: var(--font-sans);
-  font-size: 1.1429rem; /* 16px body floor at 14px root */
+  font-size: var(--ld-fs-body);
   line-height: 1.55;
 }
 
@@ -59,7 +74,7 @@
 }
 
 .landing-wordmark {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 600;
   letter-spacing: var(--track-title);
 }
@@ -80,7 +95,7 @@
   display: inline-flex;
   align-items: center;
   min-height: var(--control-h-sm);
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 400;
   color: var(--ld-muted);
   text-decoration: none;
@@ -97,6 +112,7 @@
   place-items: center;
   width: var(--control-h-sm);
   height: var(--control-h-sm);
+  border-radius: var(--ld-r-control);
   color: var(--ld-muted);
   transition: color var(--t-fast) var(--ease), background var(--t-fast) var(--ease);
 }
@@ -112,7 +128,7 @@
   gap: var(--sp-1-5);
 }
 
-/* ---------- Buttons & inline links (square, flat, decisive) ---------- */
+/* ---------- Buttons & inline links (flat, tool-grade --r-2 corners) -- */
 
 .landing-button {
   display: inline-flex;
@@ -121,8 +137,8 @@
   min-height: var(--control-h-lg);
   padding: var(--sp-2) var(--sp-6);
   border: 0;
-  border-radius: 0;
-  font-size: 1.1429rem;
+  border-radius: var(--ld-r-control);
+  font-size: var(--ld-fs-body);
   font-weight: 500;
   text-decoration: none;
   white-space: nowrap;
@@ -165,7 +181,7 @@
   align-items: center;
   gap: var(--sp-1-5);
   min-height: var(--control-h-sm);
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 500;
   color: var(--link);
   text-decoration: underline;
@@ -223,7 +239,7 @@
 .landing-headline {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(2.15rem, 4.75vw, 4.85rem);
+  font-size: var(--ld-fs-display);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: var(--track-display);
@@ -244,7 +260,7 @@
 .landing-lede {
   margin: 0;
   max-width: 48ch;
-  font-size: 1.1429rem; /* 16px body tier */
+  font-size: var(--ld-fs-body);
   line-height: 1.55;
   color: var(--ld-body);
   text-wrap: pretty;
@@ -257,7 +273,7 @@
   width: 100%;
   margin-top: var(--sp-2);
   border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-2);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
   overflow: hidden;
 }
@@ -277,7 +293,7 @@
   gap: var(--sp-1);
   min-width: 0;
   padding: var(--sp-3);
-  border-radius: var(--r-1);
+  border-radius: var(--ld-r-control);
   background: var(--ld-canvas);
   color: var(--ld-ink);
   text-align: left;
@@ -290,19 +306,19 @@
 }
 
 .landing-dial-label {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   font-weight: 500;
   color: var(--ld-muted);
 }
 
 .landing-dial-value {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 600;
   color: var(--ld-ink);
 }
 
 .landing-dial-meta {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -317,10 +333,10 @@
   flex: 1;
   min-height: var(--control-h-xs);
   padding: 0 var(--sp-2);
-  border-radius: var(--r-1);
+  border-radius: var(--ld-r-control);
   background: var(--ld-canvas);
   color: var(--ld-muted);
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   font-weight: 500;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -347,7 +363,7 @@
 }
 
 .landing-dispatch-title {
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 600;
   color: var(--ld-ink);
 }
@@ -355,9 +371,9 @@
 .landing-dispatch-badge {
   margin-left: auto;
   padding: var(--sp-0-5) var(--sp-2);
-  border-radius: var(--r-1);
+  border-radius: var(--ld-r-micro);
   background: var(--ld-elevated);
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -365,7 +381,7 @@
   margin: 0;
   padding: var(--sp-2) var(--sp-3);
   overflow-x: auto;
-  border-radius: var(--r-1);
+  border-radius: var(--ld-r-micro);
   background: var(--ld-canvas);
   font-family: var(--font-mono); /* taste-skill-ignore: literal CLI command in <pre><code> inside data-ui */
   font-size: var(--fs-code);
@@ -379,7 +395,7 @@
 
 .landing-dispatch-foot {
   margin: 0;
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -431,6 +447,10 @@
 }
 
 .landing-split-output {
+  --ld-pinned-line: color-mix(in srgb, var(--light-action) 16%, transparent);
+  --ld-pinned-line-soft: color-mix(in srgb, var(--light-action) 12%, transparent);
+  --ld-pinned-line-strong: color-mix(in srgb, var(--light-action) 24%, transparent);
+  --ld-pinned-muted: color-mix(in srgb, var(--light-action) 76%, var(--paper));
   background: var(--light-canvas);
   color: var(--light-action);
 }
@@ -451,9 +471,10 @@
 .landing-preset-btn {
   min-height: var(--control-h-sm);
   padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--ld-r-control);
   background: var(--dark-canvas);
   color: var(--dark-ink);
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 500;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -464,7 +485,7 @@
 }
 
 .landing-split-label {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 500;
   color: var(--dark-ink);
 }
@@ -474,10 +495,11 @@
   max-width: 42ch;
   padding: var(--sp-4);
   border: 0;
+  border-radius: var(--ld-r-control);
   background: var(--dark-canvas);
   color: var(--dark-ink);
   font-family: var(--font-sans);
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   line-height: 1.4;
   resize: vertical;
 }
@@ -485,14 +507,14 @@
 .landing-split-note {
   margin: 0;
   max-width: 46ch;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--dark-ink);
 }
 
 .landing-split-heading {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.85rem, 3.2vw, 3.25rem);
+  font-size: var(--ld-fs-section);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: var(--track-display);
@@ -512,8 +534,8 @@
   flex-direction: column;
   gap: var(--sp-4);
   padding: var(--sp-5);
-  border: var(--stroke-w) solid color-mix(in srgb, var(--light-action) 16%, transparent);
-  border-radius: var(--r-3);
+  border: var(--stroke-w) solid var(--ld-pinned-line);
+  border-radius: var(--ld-r-panel);
   background: var(--paper);
   color: var(--light-action);
 }
@@ -533,19 +555,19 @@
 }
 
 .landing-thread-agent {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 600;
   color: var(--light-action);
 }
 
 .landing-thread-host {
-  font-size: 0.9286rem;
-  color: color-mix(in srgb, var(--light-action) 76%, var(--paper));
+  font-size: var(--ld-fs-meta);
+  color: var(--ld-pinned-muted);
 }
 
 .landing-thread-goal {
   margin: 0;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   line-height: 1.5;
   color: var(--light-action);
 }
@@ -554,15 +576,15 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
-  font-size: 0.9286rem;
-  color: color-mix(in srgb, var(--light-action) 76%, var(--paper));
+  font-size: var(--ld-fs-meta);
+  color: var(--ld-pinned-muted);
 }
 
 .landing-thread-receipt {
   margin: 0;
   padding: var(--sp-3);
   overflow-x: auto;
-  border-radius: var(--r-2);
+  border-radius: var(--ld-r-micro);
   background: var(--light-canvas);
   font-family: var(--font-mono); /* taste-skill-ignore: literal command output in <pre><code> inside data-ui */
   font-size: var(--fs-code);
@@ -575,12 +597,12 @@
   flex-direction: column;
   gap: var(--sp-3);
   padding-top: var(--sp-3);
-  border-top: var(--stroke-w) solid color-mix(in srgb, var(--light-action) 12%, transparent);
+  border-top: var(--stroke-w) solid var(--ld-pinned-line-soft);
 }
 
 .landing-thread-gate-q {
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 500;
   color: var(--light-action);
 }
@@ -594,11 +616,11 @@
 .landing-gate-btn {
   min-height: var(--control-h-sm);
   padding: var(--sp-1) var(--sp-4);
-  border: var(--stroke-w) solid color-mix(in srgb, var(--light-action) 24%, transparent);
-  border-radius: var(--r-2);
+  border: var(--stroke-w) solid var(--ld-pinned-line-strong);
+  border-radius: var(--ld-r-control);
   background: var(--paper);
   color: var(--light-action);
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 500;
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
@@ -626,7 +648,7 @@
 .landing-section-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.85rem, 3.2vw, 3.25rem);
+  font-size: var(--ld-fs-section);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: var(--track-display);
@@ -686,7 +708,7 @@
 
 .landing-cr-title {
   margin: 0;
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: var(--track-title);
@@ -696,7 +718,7 @@
 .landing-cr-body {
   margin: 0;
   max-width: 44ch;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
   text-wrap: pretty;
 }
@@ -707,6 +729,7 @@
   justify-content: space-between;
   gap: var(--sp-3);
   padding: var(--sp-4);
+  border-radius: var(--ld-r-control);
   background: var(--ld-surface);
 }
 
@@ -725,9 +748,10 @@
   place-items: center;
   width: var(--control-h-sm);
   height: var(--control-h-sm);
+  border-radius: var(--ld-r-control);
   background: var(--ld-elevated);
   color: var(--ld-ink);
-  transition: background var(--t-fast) var(--ease);
+  transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }
 
 .landing-copy-btn:hover {
@@ -743,19 +767,19 @@
   margin-inline-start: var(--sp-7);
   padding: var(--sp-3) var(--sp-4);
   border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-2);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-canvas);
 }
 
 .landing-cr-resp-main {
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 600;
   color: var(--ld-ink);
 }
 
 .landing-cr-resp-sub {
   margin-left: auto;
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -836,7 +860,7 @@
 
 .landing-note-title {
   margin: 0;
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: var(--track-title);
@@ -845,7 +869,7 @@
 
 .landing-note-body {
   margin: 0;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
   text-wrap: pretty;
 }
@@ -855,7 +879,7 @@
   display: flex;
   flex-direction: column;
   border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-3);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
   overflow: hidden;
 }
@@ -870,13 +894,13 @@
 }
 
 .landing-panel-name {
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 600;
   color: var(--ld-ink);
 }
 
 .landing-panel-state {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--live);
 }
 
@@ -923,7 +947,7 @@
 }
 
 .landing-panel-role {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 600;
   color: var(--ld-ink);
 }
@@ -932,12 +956,12 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1-5);
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--tone, var(--ld-muted));
 }
 
 .landing-panel-meta {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -952,7 +976,7 @@
 }
 
 .landing-panel-summary {
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   color: var(--ld-body);
 }
 
@@ -960,7 +984,7 @@
   display: block;
   padding: var(--sp-2) var(--sp-3);
   overflow-x: auto;
-  border-radius: var(--r-1);
+  border-radius: var(--ld-r-micro);
   background: var(--ld-surface);
   font-family: var(--font-mono); /* taste-skill-ignore: literal CLI command in <code> inside data-ui */
   font-size: var(--fs-code);
@@ -969,7 +993,7 @@
 }
 
 .landing-panel-out {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -1046,7 +1070,7 @@
 
 .landing-plate-title {
   margin: 0;
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: var(--track-title);
@@ -1056,7 +1080,7 @@
 .landing-plate-body {
   margin: 0;
   max-width: 46ch;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
   text-wrap: pretty;
 }
@@ -1099,7 +1123,7 @@
 .landing-about-body {
   margin: 0;
   max-width: 56ch;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
   text-wrap: pretty;
 }
@@ -1111,7 +1135,7 @@
   gap: var(--sp-3);
   padding: var(--sp-5);
   border: var(--stroke-w) solid var(--ld-hairline);
-  border-radius: var(--r-3);
+  border-radius: var(--ld-r-panel);
   background: var(--ld-surface);
 }
 
@@ -1123,13 +1147,13 @@
 }
 
 .landing-fleet-title {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   font-weight: 600;
   color: var(--ld-ink);
 }
 
 .landing-fleet-count {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ok);
 }
 
@@ -1149,7 +1173,7 @@
   gap: var(--sp-3);
   padding-block: var(--sp-2);
   border-top: var(--stroke-w) solid var(--ld-hairline-soft);
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
 }
 
 .landing-fleet-host {
@@ -1168,7 +1192,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-1-5);
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   font-variant-numeric: tabular-nums;
   color: var(--tone, var(--ld-muted));
 }
@@ -1177,7 +1201,7 @@
   margin-top: var(--sp-2);
   padding-top: var(--sp-3);
   border-top: var(--stroke-w) solid var(--ld-hairline);
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   font-weight: 600;
   color: var(--ld-ink);
 }
@@ -1192,12 +1216,12 @@
 }
 
 .landing-runtime-name {
-  font-size: 1rem;
+  font-size: var(--ld-fs-ui);
   color: var(--ld-ink);
 }
 
 .landing-runtime-ready {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--tone, var(--ld-muted));
 }
 
@@ -1214,7 +1238,7 @@
 .landing-oss-title {
   margin: 0;
   font-family: var(--font-display);
-  font-size: clamp(1.85rem, 3.2vw, 3.25rem);
+  font-size: var(--ld-fs-section);
   font-weight: 600;
   line-height: 1.02;
   letter-spacing: var(--track-display);
@@ -1229,7 +1253,7 @@
 
 .landing-oss-line {
   margin: 0;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
 }
 
@@ -1240,6 +1264,7 @@
   min-width: 0;
   margin: 0;
   padding: var(--sp-4);
+  border-radius: var(--ld-r-control);
   background: var(--ld-canvas);
 }
 
@@ -1251,7 +1276,7 @@
 }
 
 .landing-terminal-label {
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -1301,7 +1326,7 @@
   margin: 0;
   width: 100%;
   font-family: var(--font-display);
-  font-size: clamp(1.85rem, 3.2vw, 3.25rem);
+  font-size: var(--ld-fs-section);
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: var(--track-display);
@@ -1315,7 +1340,7 @@
   height: 1.2em;
   padding: 0 0.35em;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--ld-r-control);
   background: var(--ld-surface);
   color: var(--ld-ink);
   font: inherit;
@@ -1332,7 +1357,7 @@
   height: 1.2em;
   padding: 0 0.5em;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--ld-r-control);
   background: var(--ld-accent);
   color: var(--dark-canvas);
   font: inherit;
@@ -1348,7 +1373,7 @@
 
 .landing-blank-note {
   margin: 0;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-body);
 }
 
@@ -1396,7 +1421,7 @@
 .landing-tile-pitch {
   margin: 0;
   max-width: 24ch;
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 500;
   line-height: 1.25;
   color: var(--ld-ink);
@@ -1404,7 +1429,7 @@
 
 .landing-tile-legal {
   margin: 0;
-  font-size: 0.9286rem;
+  font-size: var(--ld-fs-meta);
   color: var(--ld-muted);
 }
 
@@ -1414,7 +1439,7 @@
 }
 
 .landing-tile-link {
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   color: var(--ld-ink);
   text-decoration: none;
   transition: color var(--t-fast) var(--ease);
@@ -1426,7 +1451,7 @@
 
 .landing-tile-list {
   margin: 0;
-  font-size: 1.1429rem;
+  font-size: var(--ld-fs-body);
   line-height: 1.55;
   color: var(--ld-body);
 }
@@ -1439,7 +1464,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 500;
   color: var(--ld-ink);
   text-decoration: none;
@@ -1465,7 +1490,7 @@
 
 .landing-tile-giant-name {
   font-family: var(--font-display);
-  font-size: clamp(2.15rem, 4.75vw, 4.85rem);
+  font-size: var(--ld-fs-display);
   font-weight: 600;
   line-height: 0.95;
   letter-spacing: var(--track-display);
@@ -1490,7 +1515,7 @@ html[data-theme="light"] .landing-blank-submit {
 }
 
 .landing-tile-accent-label {
-  font-size: 1.5714rem;
+  font-size: var(--ld-fs-subhead);
   font-weight: 600;
   line-height: 1.1;
   letter-spacing: var(--track-title);
@@ -1684,7 +1709,7 @@ html[data-theme="light"] .landing-blank-submit {
   .landing-terminal-command {
     white-space: pre-wrap;
     overflow-wrap: break-word;
-    font-size: 0.8571rem;
+    font-size: var(--fs-1);
   }
 
   .landing-cr-call {
@@ -1760,7 +1785,7 @@ html[data-theme="light"] .landing-blank-submit {
   }
 
   .landing-dial-value {
-    font-size: 1rem;
+    font-size: var(--ld-fs-ui);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1814,7 +1839,7 @@ html[data-theme="light"] .landing-blank-submit {
   .landing-cr-title,
   .landing-note-title,
   .landing-plate-title {
-    font-size: 1.2857rem; /* 18px */
+    font-size: var(--fs-document-subheading);
   }
 
   .landing-blank-input {
