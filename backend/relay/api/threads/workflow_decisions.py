@@ -104,7 +104,7 @@ def workflow_decision(
             }
         project_id = session.get("projectId")
         project = ctx.project_store.get_project(project_id) if project_id else None
-        if not project or project.get("ownerUserId") != owner:
+        if project_id and (not project or project.get("ownerUserId") != owner):
             raise HTTPException(403, "workflow_project_owner_required")
         run = next((item for item in session.get("workflowRuns", [])
                     if item["workflowRunId"] == _request_body["workflowRunId"]), None)
@@ -114,7 +114,7 @@ def workflow_decision(
         if any(session.get(key) != (snapshot_team_id(snapshot) if key == "teamId" else snapshot.get(team_key)) for key, team_key in (
             ("teamId", "id"), ("projectId", "projectId"),
             ("computerId", "computerId"), ("ownerUserId", "ownerUserId"),
-        )) or project["computerId"] != snapshot["computerId"]:
+        )) or (project is not None and project["computerId"] != snapshot["computerId"]):
             raise HTTPException(409, "workflow_scope_mismatch")
         try:
             if _request_body["kind"] == "approve":

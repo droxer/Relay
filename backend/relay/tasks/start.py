@@ -78,12 +78,12 @@ def prepare_task_start(
         task = legacy_task
     if not assignments and task.get("assignedAgentId") and task.get("assignedAgent"):
         assignments = [_assigned_agent(task)]
-    if not assignments and not task.get("assignedTeamId") and not task.get("projectId"):
+    if not assignments and not task.get("assignedTeamId") and not task.get("projectId") and not task.get("assignedWorkflowId"):
         assignments = implicit_group_assignments_for_task(ctx, task)
     agent = valid_agent(task.get("assignedAgent"))
     if not agent and assignments:
         agent = assignments[0]["agent"]
-    if not agent and not task.get("assignedTeamId") and not task.get("projectId"):
+    if not agent and not task.get("assignedTeamId") and not task.get("projectId") and not task.get("assignedWorkflowId"):
         return _dispatch_outcome(
             ctx, task_id, "rejected", AGENT_NOT_FOUND, NAMED_AGENT_REQUIRED
         )

@@ -39,7 +39,8 @@ def dispatch_index_where(dialect: str) -> Any:
     false = "false" if dialect == "postgresql" else "0"
     return text(
         f"status IN ('assigned', 'queued') AND is_routine IS {false} AND deleted_at IS NULL "
-        "AND (assigned_agent IS NOT NULL OR assigned_team_id IS NOT NULL OR project_id IS NOT NULL)"
+        "AND (assigned_agent IS NOT NULL OR assigned_team_id IS NOT NULL OR project_id IS NOT NULL "
+        "OR (snapshot ->> 'assignedWorkflowId') IS NOT NULL)"
     )
 
 

@@ -7,13 +7,17 @@ workflows = Table(
     Column('owner_user_id', entity_uuid_type(), ForeignKey('users.id', ondelete='RESTRICT'), nullable=False),
     Column('project_id', entity_uuid_type(), ForeignKey('projects.id', ondelete='RESTRICT'), nullable=True),
     Column('owner_team_id', entity_uuid_type(), ForeignKey('teams.id', ondelete='RESTRICT'), nullable=True),
-    CheckConstraint('(project_id IS NOT NULL AND owner_team_id IS NULL) OR (project_id IS NULL AND owner_team_id IS NOT NULL)', name='ck_workflow_owner_scope'),
+    Column('computer_id', Text, nullable=True),
+    CheckConstraint('(project_id IS NOT NULL AND owner_team_id IS NULL AND computer_id IS NULL) OR '
+                    '(project_id IS NULL AND owner_team_id IS NOT NULL AND computer_id IS NULL) OR '
+                    '(project_id IS NULL AND owner_team_id IS NULL AND computer_id IS NOT NULL)', name='ck_workflow_owner_scope'),
     Column('name', Text, nullable=False), Column('name_key', Text, nullable=False),
     Column('snapshot', json_type(), nullable=False), Column('event_version', BigInteger, nullable=False),
     Column('created_at', DateTime(timezone=True), nullable=False),
     Column('updated_at', DateTime(timezone=True), nullable=False),
     Column('deleted_at', DateTime(timezone=True), nullable=True),
     Index('ix_workflows_owner_project', 'owner_user_id', 'project_id'),
+    Index('ix_workflows_owner_computer', 'owner_user_id', 'computer_id'),
     Index('ix_workflows_project', 'project_id',
           postgresql_where=text('project_id IS NOT NULL'), sqlite_where=text('project_id IS NOT NULL')),
     Index('ix_workflows_owner_team', 'owner_team_id',

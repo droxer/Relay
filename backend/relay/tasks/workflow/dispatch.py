@@ -1,4 +1,4 @@
-"""Task entry into the dedicated Project workflow runtime.
+"""Task entry into the dedicated Workflow runtime.
 
 Claim, frozen ledger, navigation link and execution generation commit together,
 including when the very first step waits for approval and has no command yet.
@@ -8,21 +8,23 @@ from __future__ import annotations
 from typing import Any
 from uuid import NAMESPACE_URL, uuid5
 
-from ..agents.routing import AgentRoutingError, resolve_agent_assignments
-from ..collaboration.workflow_compilation import compile_workflow
-from ..core.computer_identity import computer_id
-from ..core.daemon_records import ComputerRunCapacityError
-from ..daemon_registry.dispatch.workflow_tasks import sync_workflow_task
-from ..persistence.engine import store_transaction
-from ..persistence.protocols import TaskDispatchAssignment
-from ..projects.runtime import project_runtime_node
-from ..security.actor import Actor
-from .assignment import team_for_assignment, validate_project_task_assignment, validate_task_workflow
-from .claims import dispatch_claim_active
-from .dispatch_outcome import TaskDispatchContext, DispatchResult, _result, _record_result
-from .placement import task_goal_text
-from .requests import TaskRequestError
-from .dispatch_failure import record_computer_capacity_wait, record_dispatch_failure
+from ...agents.routing import AgentRoutingError, resolve_agent_assignments
+from ...collaboration.workflow_compilation import compile_workflow
+from ...core.computer_identity import computer_id
+from ...core.daemon_records import ComputerRunCapacityError
+from ...daemon_registry.dispatch.workflow_tasks import sync_workflow_task
+from ...persistence.engine import store_transaction
+from ...persistence.events import relay_task_event
+from ...persistence.protocols import TaskDispatchAssignment
+from ...projects.runtime import project_runtime_node
+from ...security.actor import Actor
+from ..assignment import team_for_assignment, validate_project_task_assignment, validate_task_workflow
+from ..claims import dispatch_claim_active
+from ..dispatch_outcome import TaskDispatchContext, DispatchResult, _result, _record_result
+from ..placement import task_goal_text
+from ..requests import TaskRequestError
+from ..dispatch_failure import record_computer_capacity_wait, record_dispatch_failure
+from ..workspace import resolve_task_workspace
 
 
 def dispatch_task_workflow(
@@ -30,16 +32,18 @@ def dispatch_task_workflow(
 ) -> DispatchResult:
     registry = ctx.registry
     project = ctx.project_store.get_project(source["projectId"]) if source.get("projectId") else None
-    if project is None:
-        code = "project_not_found" if source.get("projectId") else "team_workflow_project_mismatch"
+    if source.get("projectId") and project is None:
+        code = "project_not_found"
         if not record_pending:
             return _record_result(ctx, source["id"], "rejected", code=code)
         # A scheduled task left assigned would be refused again on every tick.
         return _record_pending_failure(ctx, source, code)
+    definition = ctx.workflow_store.get_workflow(source.get('assignedWorkflowId')) if source.get('assignedWorkflowId') else None
+    identity = project['computerId'] if project else (definition or {}).get('computerId')
     try:
         with registry.dispatch_lock, registry.dispatch_scope([
             node["id"] for node in registry.monitor_nodes()
-            if computer_id(node) == project["computerId"]
+            if computer_id(node) == identity
         ]), store_transaction(registry.daemon_store.engine), ctx.task_store.task_write_scope(source["id"]) as task:
             if dispatch_claim_active(task) or registry.daemon_store.active_run_request_for_task(task["id"]):
                 return _result(task, "queued", code="task_execution_active")
@@ -54,10 +58,15 @@ def dispatch_task_workflow(
             team = validate_task_workflow(ctx, task) or team
             if team is None:
                 raise ValueError("workflow_definition_required")
-            project = ctx.project_store.get_project(task["projectId"])
-            if not project:
-                raise ValueError("project_not_found")
-            node = project_runtime_node(project, registry.monitor_nodes())
+            project = ctx.project_store.get_project(task['projectId']) if task.get('projectId') else None
+            if task.get('projectId') and not project:
+                raise ValueError('project_not_found')
+            node = (project_runtime_node(project, registry.monitor_nodes()) if project else min((
+                node for node in registry.monitor_nodes()
+                if computer_id(node) == team['computerId'] and node.get('userId') == owner
+                and not node.get('retiredAt') and node.get('online') and not node.get('stale')
+                and node.get('status') in ('ready', 'busy', 'running')
+            ), key=lambda item: item['id'], default=None))
             if node is None:
                 raise ValueError("workflow_computer_unavailable")
             roster = resolve_agent_assignments(
@@ -65,6 +74,14 @@ def dispatch_task_workflow(
                 is_admin=False, agent_store=ctx.agent_store, placement_store=ctx.agent_placement_store,
                 daemon_nodes=registry.monitor_nodes(), required_node_id=node["id"],
             )
+            layout, subpath = resolve_task_workspace(
+                task, node=node, project_snapshot=project, session_store=registry.store,
+            )
+            if not task.get('workspaceBinding'):
+                task = ctx.task_store.append_event(task['id'], relay_task_event('task.workspace_bound', task['id'], {
+                    'binding': {'computerId': team['computerId'], 'layout': layout, 'subpath': subpath,
+                                'workspaceRoot': node.get('workspacePath') or '/workspace'},
+                }))
             if task["status"] == "backlog":
                 task = ctx.task_store.update_task(task["id"], {"status": "assigned"})
             claimed = ctx.task_store.claim_task_for_dispatch(
@@ -76,9 +93,9 @@ def dispatch_task_workflow(
             run_id = str(uuid5(NAMESPACE_URL, "relay.task-workflow.v1:" + claim_id))
             session = registry.stage_workflow_gate({  # continues the Task's own thread when it fits
                 "id": run_id, "ownerUserId": owner, "teamId": task.get("assignedTeamId"),
-                "projectId": project["id"], "computerId": project["computerId"],
+                "projectId": project['id'] if project else None, "computerId": team['computerId'],
                 "workspacePath": node.get("workspacePath") or "/workspace",
-                "workspaceLayout": "project", "workspaceSubpath": project["workspaceSubpath"],
+                "workspaceLayout": layout, "workspaceSubpath": subpath,
                 "taskGoal": task_goal_text(task),
             }, compile_workflow(team, roster, run_id=run_id), task=claimed, continue_thread=True)
             sid = session["id"]

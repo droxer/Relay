@@ -2458,17 +2458,34 @@ The W3 editor, run start, thread progress and decision slip use only the routes
 above. Integrated release verification, including themes/device sizes against a
 real backend and daemon, remains W4; this API does not claim release readiness.
 
-### Independent Project Workflows
+### Independent Workflows
 
-Custom definitions belong to their creating Team or Project (exactly one owner).
-Team-owned definitions are reusable for that Team’s Tasks and Automations across
-compatible execution Projects; Project definitions apply within their Project.
+Custom definitions have exactly one immutable scope: a Project, a legacy Team,
+or a standalone Computer. Standalone definitions belong to the signed-in User
+and accept `computerId` instead of `projectId` or `ownerTeamId`. Their steps name
+that User's Agents placed on the Computer. Project definitions apply within
+their Project; Team definitions retain their existing direct-run contract.
 The owner-session API is `GET/POST /api/v1/workflows`,
 `GET/PATCH/DELETE /api/v1/workflows/{id}`, and
 `POST /api/v1/workflows/{id}/runs`. List accepts optional `projectId`; run
 accepts `requestId`, `taskGoal`, and optional eligible `teamId`. Team-owned
 definitions additionally require their owning Team and an execution `projectId`.
 A new run freezes `workflowSnapshot`, retaining `teamSnapshot` as a wire alias.
+
+For independent Tasks, create a standalone definition with `name`, `computerId`,
+`workflowSteps` and optional `enabled`. List its definitions or choices with
+`GET /api/v1/workflows?scope=standalone` or `?scope=standalone&view=choices`;
+choices include `computerId` and `stepAgentIds`. The existing unscoped
+`view=choices` remains Project-only. `scope=standalone` cannot combine with
+`projectId`. Names are case-insensitively unique per User and Computer.
+Assign it through `assignedWorkflowId` on an independent Task with the same
+`computerId`, without `assignedAgentId` or `assignedTeamId`, then start using
+`POST /api/v1/tasks/{id}/runs`. The Task uses its durable Task Workspace and
+the existing Workflow approval/recovery routes. Standalone definitions do not
+use the Project-only `POST /workflows/{id}/runs` entry. Existing Team/default
+assignments are not rewritten by this additive schema migration.
+Migration 0136 also updates the dispatch queue index so Ready independent Tasks
+with only `assignedWorkflowId` are discovered by the scheduler.
 
 The Team profile reads `GET /api/v1/teams/{teamId}?view=preview` for Workflow
 previews and its members' Agent placements. The Team roster keeps the smaller

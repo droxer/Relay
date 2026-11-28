@@ -355,6 +355,7 @@ class TaskScheduler(DispatchCandidates):
         if not (
             (valid_agent(task.get("assignedAgent")) and task.get("assignedAgentId"))
             or task.get("assignedTeamId")
+            or task.get("assignedWorkflowId")
             or task.get("projectId")
         ):
             return CandidateOutcome.IGNORED

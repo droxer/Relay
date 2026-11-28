@@ -10,7 +10,7 @@ from ..collaboration.assignments import assignment_team_snapshot
 from ..collaboration.manifest import compile_assignment_work_graph, create_round_manifest
 from ..core.ids import new_database_id
 from ..core.workflow_selection import selected_workflow_id, predefined_style
-from .workflow import dispatch_task_workflow
+from .workflow.dispatch import dispatch_task_workflow
 from ..core.models import AgentName
 from ..core.daemon_records import ComputerRunCapacityError, ThreadRunActiveError
 from ..persistence.protocols import TaskDispatchAssignment
