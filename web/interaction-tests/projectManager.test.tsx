@@ -128,7 +128,10 @@ it('opens separate Lead discussions with their own drafts and the role as the de
   .mockResolvedValueOnce({threadId:'plain-thread',agentId:'a'});
  const onOpenThread=vi.fn();
  const {result}=renderHook(()=>useProjectLeadDiscussion({projectId:'p',currentUser:owner,onOpenThread}),{wrapper:hookWrapper(client)});
- act(()=>result.current.discuss('next'));
+ act(() => {
+  result.current.discuss('next');
+  result.current.discuss();
+ });
  await waitFor(()=>expect(result.current.pending).toBe(true));
  act(()=>result.current.discuss());
  expect(api.open).toHaveBeenCalledOnce();

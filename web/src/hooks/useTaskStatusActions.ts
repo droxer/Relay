@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useRelayMutations } from "./useRelayMutations";
 
 export type TaskStatusAction = "accept" | "unblock";
@@ -11,24 +11,27 @@ export type TaskStatusAction = "accept" | "unblock";
  */
 export function useTaskStatusActions(taskId: string | undefined) {
   const { updateTaskMutation } = useRelayMutations();
-  const [busy, setBusy] = useState<TaskStatusAction | null>(null);
+  const operations = useRef(new Map<string, TaskStatusAction>());
+  const [pending, setPending] = useState<ReadonlyMap<string, TaskStatusAction>>(() => new Map());
   const { mutateAsync } = updateTaskMutation;
 
   const run = useCallback(async (action: TaskStatusAction): Promise<boolean> => {
-    if (!taskId || busy) return false;
-    setBusy(action);
+    if (!taskId || operations.current.has(taskId)) return false;
+    operations.current.set(taskId, action);
+    setPending(new Map(operations.current));
     try {
       await mutateAsync({ taskId, input: action === "accept" ? { status: "done" } : { action: "unblock" } });
       return true;
     } catch {
       return false;
     } finally {
-      setBusy(null);
+      operations.current.delete(taskId);
+      setPending(new Map(operations.current));
     }
-  }, [busy, mutateAsync, taskId]);
+  }, [mutateAsync, taskId]);
 
   return {
-    busy,
+    busy: taskId ? pending.get(taskId) ?? null : null,
     accept: useCallback(() => run("accept"), [run]),
     unblock: useCallback(() => run("unblock"), [run]),
   };

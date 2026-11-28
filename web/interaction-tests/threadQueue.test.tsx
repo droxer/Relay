@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useThreadQueue } from "../src/hooks/useThreadQueue";
 import { apiJson, RelayApiError } from "../src/api-client/client";
 import { setSessionStreamConnected } from "../src/lib/sessionStreamStatus";
-import { THREAD_QUEUE_QUERY_KEY } from "../src/lib/threadQueue";
+import { THREAD_QUEUE_QUERY_KEY, type QueueState } from "../src/lib/threadQueue";
 
 vi.mock("../src/api-client/client", async (importOriginal) => ({
   ...await importOriginal<typeof import("../src/api-client/client")>(), apiJson: vi.fn(),
@@ -153,14 +153,14 @@ it("restores a queue edit to its original draft after the composer unmounts", as
   sessionStorage.setItem(draftKey, "unsent text");
   const hook = open();
   await waitFor(() => expect(hook.result.current.messages).toHaveLength(1));
-  const receipt = Promise.withResolvers<never>();
-  vi.mocked(apiJson).mockImplementationOnce(() => receipt.promise);
+  const receipt = Promise.withResolvers<QueueState>();
+  vi.mocked(apiJson).mockReturnValueOnce(receipt.promise);
   let edit!: Promise<void>;
   act(() => { edit = hook.result.current.edit("q1"); });
   hook.unmount();
 
   await act(async () => {
-    receipt.resolve({ messages: [], paused: false } as never);
+    receipt.resolve({ messages: [], paused: false });
     await edit;
   });
 
